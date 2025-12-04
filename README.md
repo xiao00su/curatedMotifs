@@ -9,7 +9,7 @@ curatedMotif
 
 - 3255 High-quality Non-Redundant DNA binding motifs for ~1400 mouse/human genes.
 - supported by a transparent curation workflow. 
-- Seamless integration with sequencing data, such as ChIP-seq, ATAC-seq, and snATAC-seq.
+- Seamless integration with sequencing data, such as ChIP-seq, ATAC-seq, and snATAC-seq (see "Implementation on your data" part).
 
 
 
