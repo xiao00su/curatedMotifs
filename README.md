@@ -7,7 +7,7 @@ curatedMotif
 
 
 
-- 3255 High-quality Non-Redundant motifs for 1410 mouse/human genes.
+- 3255 High-quality Non-Redundant motifs for ~1400 mouse/human genes.
 - supported by a transparent curation workflow. 
 - Seamless integration with sequencing data, such as ChIP-seq, ATAC-seq, and snATAC-seq.
 
