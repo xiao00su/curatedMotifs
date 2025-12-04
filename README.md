@@ -1,6 +1,10 @@
-# curatedMotifs
-3255 High-quality, manually curated, non-redundant DNA binding motifs for 1410 mouse/human genes.
-[CuratedMotifs.md](https://github.com/user-attachments/files/23743464/CuratedMotifs.md)
+[CuratedMotifs.md](https://github.com/user-attachments/files/23922706/CuratedMotifs.md)
+---
+curatedMotif
+---
+
+
+
 
 
 - 3255 High-quality Non-Redundant motifs for 1410 mouse/human genes.
@@ -8,7 +12,10 @@
 - Seamless integration with sequencing data, such as ChIP-seq, ATAC-seq, and snATAC-seq.
 
 
+
 Data Sources and Workflow
+
+
 
 1. Original motifs were obtained from cisBP, JASPAR, Encode, and homer
 
@@ -417,16 +424,18 @@ ggsave( paste0( gene1, "_motif.pdf"), plot = plotM, path = figDir, scale = 1.3, 
         height = length(motifx), units = "cm", dpi = 150, limitsize = F )
 ```
 
-## Appication with your data
+## Implementation on your data
 
 ### using with Signac (snATAC-seq)
 
 ```r
 library(universalmotif) # BiocManager::install("universalmotif")
+# library("motifStack") # BiocManager::install('motifStack')
 library('chromVAR') # BiocManager::install('chromVAR')
 library(motifmatchr) # BiocManager::install('motifmatchr')
 library('BSgenome.Mmusculus.UCSC.mm39') 
 library(TFBSTools)
+library(Signac) # 本身也是利用motifmatchr的功能进行扫描
 
 motifTFBS <- convert_motifs( motifs = curatedMotif, class = 'TFBSTools-PFMatrix')
 motifTFBS <- do.call(TFBSTools::PFMatrixList, motifTFBS)  
@@ -446,7 +455,6 @@ library('chromVAR') # BiocManager::install('chromVAR')
 library(motifmatchr) # BiocManager::install('motifmatchr')
 library('BSgenome.Mmusculus.UCSC.mm39') 
 library(TFBSTools)
-library(Signac) # 本身也是利用motifmatchr的功能进行扫描
 
 motifTFBS <- universalmotif::convert_motifs( motifs = curatedMotif, class = 'TFBSTools-PFMatrix')
 motifTFBS <- do.call(TFBSTools::PFMatrixList, motifTFBS) 
@@ -456,7 +464,124 @@ motifMtx <- Signac::CreateMotifMatrix(features = Signac::StringToGRanges(regions
 motifMtx <- as.matrix(motifMtx)
 ```
 
+### with peak counts
 
+|                      | Lhx2cKO_1 | Lhx2cKO_2 | WT_1 | WT_2 |
+| -------------------- | --------- | --------- | :--- | ---- |
+| chr1:3164708-3165648 | 59        | 64        | 117  | 108  |
+| chr1:3189930-3190957 | 80        | 94        | 60   | 55   |
+| chr1:3469987-3470570 | 19        | 30        | 55   | 63   |
+| chr1:3740787-3741419 | 57        | 60        | 48   | 39   |
+
+```r
+library(universalmotif)
+library(motifStack)
+library(Signac)
+library(BSgenome.Mmusculus.UCSC.mm39)
+library(tidyverse)
+library(motifmatchr)
+
+curatedMotif <- readRDS(paste0(OneDrive, '/code/R-code/curatedMotif.rds') )
+# counts <- counts[grep(pattern = '^chr', rownames(counts)),] 
+# stander chromatin, error evolced from mismatch chr scoffold between data and BSgenome
+counts <- countX[, c(mutantCol, controlCol)]
+countRC <- 1e+07*t(t(counts)/colSums(counts)) %>% as.data.frame() # normalization sequencing depth
+
+scanMotifs <- function(motifX = curatedMotif, peakCounts = countRC, 
+                       genome = 'BSgenome.Mmusculus.UCSC.mm39', method = 'matches'  ) {
+  motifTFBS <- convert_motifs( motifs = motifX, class = 'TFBSTools-PFMatrix')
+  motifTFBS <- do.call(TFBSTools::PFMatrixList, motifTFBS)
+  motifMtx <- matchMotifs(pwms = motifTFBS, genome = genome, 
+                          subject = StringToGRanges(regions = rownames(peakCounts), sep = c(":", "-")), 
+                          out = "scores" ) # bg = background
+  
+  if (method == 'matches') {
+    bind <- motifmatchr::motifMatches(motifMtx) # 是否出现  
+    bind2 <- as.integer(bind)
+    dim(bind2) <- dim(bind)
+    rownames(bind2) <- paste(motifMtx@rowRanges@seqnames, motifMtx@rowRanges@ranges, sep = ':' ) 
+    colnames(bind2) <- motifMtx@colData$name
+  }
+  
+  if (method == 'counts') {
+    bind2 <- motifmatchr::motifCounts(motifMtx)  
+    rownames(bind2) <- paste(motifMtx@rowRanges@seqnames, motifMtx@rowRanges@ranges, sep = ':' )
+  }
+  
+  motifCounts <- data.frame(row.names = motifMtx@colData$name)
+  for (i in colnames(peakCounts)) {
+    motifCounts[[i]] <- colSums( bind2*peakCounts[[i]])
+  }
+  
+  return(motifCounts)
+}
+
+Lhx2cKOmotif <- scanMotifs(motifX = curatedMotif, peakCounts = countRC, 
+                           genome = 'BSgenome.Mmusculus.UCSC.mm39', method = 'matches' )
+```
+
+```r
+projectX <- 'Lhx2cKO_ATAC'
+outDir <- 'E:/Lhx2cKO/Lhx2cKO_ATAC'
+figDir <- 'E:/Lhx2cKO/Lhx2cKO_ATAC/png'
+dir.create(figDir,recursive = T)
+
+library(edgeR)
+library(tidyverse)
+ 
+y <- DGEList(count= motifMtx, remove.zeros= T, group=groupX$group ) # 构建EdgeR对象
+# y$samples$group <- rep(c('Lhx2cKO', 'control'), each =2)
+y <- calcNormFactors(y)  # 计算标准化因子 默认使用TMM方法
+y <- estimateDisp(y) # 同时计算common disperse 和 tagwise disperse
+DiffExp <- exactTest(y, pair = c('control', 'Lhx2cKO')) # 对照在前
+DiffExp$table$FDR <- p.adjust(DiffExp$table$PValue, method="fdr", n=length(DiffExp$table$PValue)) ## 校正p值
+dataE <- DiffExp$table    ##导出全部结果
+dataE$motif <- rownames(dataE)
+dataE$logCPM <- NULL
+dataE$'nlogQ' <- -log((dataE$FDR + 1.028776e-323), base = 10) 
+dataE$change <- ifelse(dataE$FDR > 0.05, 'NS', ifelse(dataE$logFC <0, 'down', 'up'))
+# dataE$log2FC <- log2(rowMeans( motifMtx[,1:2])  / rowMeans(motifMtx[,3:4]) )
+dataE$diff <- rowMeans(motifMtx[,1:2]) - rowMeans(motifMtx[,3:4])
+                        
+lab1 <- labs(title ='E15Ctx ATAC, Lhx2cKO vs WT', 
+             subtitle = paste0("total = ", nrow(dataE), " motifs", ", up = ", 
+                               nrow(dataE[dataE$change == "up", ]), ", down = ", nrow(dataE[dataE$change == "down", ]))) 
+
+theme1 <- theme(plot.title=element_text(face="bold", size= 20, hjust=0.5,vjust=0.5, angle=360,lineheight=113),
+                plot.subtitle = element_text(face="bold", color="steelblue",size= 16, hjust=1), 
+                legend.key= element_blank(), legend.key.size=unit(0.8,'cm'), 
+                axis.title=element_text(face="bold", color="black",size=14),
+                axis.title.y = element_text(angle = 90),
+                axis.line=element_line(colour='black', linewidth = 0.3),
+                panel.background=element_rect(fill = "transparent"), 
+                plot.background = element_rect(fill = "transparent", color = 'transparent')  )
+
+ggplot(data = dataE,  mapping = aes( x = diff, y = nlogQ, color = change, fill = change, shape=, size= nlogQ)) + 
+  geom_point(shape=21, alpha = 0.5, stroke = 0, color = 'transparent' )  + lab1 + theme_void() + theme1  +
+  scale_fill_manual(values = c( '#4169E1', 'gray50',  '#FF0000'), na.value = 'gray15' ) +
+  geom_hline(yintercept = 0, linetype = 4 ) + geom_vline(xintercept = 0, linetype = 4 ) +
+  geom_text(data = dataE[dataE$change != "NS",], aes(label = motif ), 
+            show.legend = F, check_overlap = T, color = 'black', alpha = 1 )  +
+  guides(color = guide_legend(ncol = 1, bycol=T, override.aes = list(size = 6, stroke = 2, alpha = 0.8)), 
+         fill = guide_legend(ncol = 1, bycol=T, override.aes = list(size = 6, stroke = 0)),
+         size = guide_legend(ncol = 1, bycol=T, override.aes = list(fill = 'black', alpha = 0.8)))
+
+ggsave(paste0( projectX, '_DEmotif.png'), plot = last_plot(), path = figDir, scale = 1.2, width = 16, height =  12, units = "cm", dpi = 144, limitsize = T)
+```
+
+```
+topA <- DEmotif[DEmotif$change=='up',] %>% top_n(n=50, nlogQ) %>% rownames()
+motifA <- curatedMotif[topA] %>% convert_motifs(class = "motifStack-pfm")
+for (i in names(motifA)) { motifA[[i]]@color <- c("#50C878", "#FF7185", "#ffbf00", "#57ABFF") }
+color2 <- scales::seq_gradient_pal(RColorBrewer::brewer.pal(8, "Dark2"))(seq(0, 1, length.out = length(motifA)))
+png(file = paste0( figDir, "/up", '_motif.png'), units="in", width=10, height=10, res=300) # 创建画布
+motifStack(pfms = motifA, layout="radialPhylog", 
+           circle = 0.95, cleaves = 0.8, clabel.leaves = 0.6, col.bg=color2, col.bg.alpha=0.2,
+           col.leaves=color2, col.inner.label.circle=color2, inner.label.circle.width=0.0,  
+           # col.outer.label.circle=color2, outer.label.circle.width=0.02, motifScale="logarithmic",
+           circle.motif= 1.25, angle=180, font = "Arial" ) 
+dev.off()
+```
 
 
 
