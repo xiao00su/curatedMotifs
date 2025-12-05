@@ -55,6 +55,8 @@ You can install the development version of curatedMotifs like so:
 
 ``` r
 remotes::install_github('xiao00su/curatedMotifs')
+# this package depends on universalmotif
+BiocManager::install("universalmotif")
 ```
 
 
