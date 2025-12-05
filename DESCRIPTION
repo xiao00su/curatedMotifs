@@ -1,0 +1,18 @@
+Package: curatedMotifs
+Title: A Gene-Annotated Database of Curated DNA Binding Motifs
+Version: 0.0.0.9000
+Authors@R: 
+    person("晓甦", "李", , "xiao00su@gmail.com", role = c("aut", "cre"))
+Description: A comprehensive collection of 3,230 high-quality, non-redundant DNA binding motifs for 1,400 human and mouse transcription factors. All motifs are provided in the UniversalMotif format, ensuring compatibility with various motif analysis tools. Each motif annotated via GENCODE, GeneCards, and literature validation. The dataset was curated from over 9,000 raw motifs obtained from four major databases: cis-BP, JASPAR, ENCODE, and HOMER. Each motif underwent rigorous quality filtering, flank trimming, and similarity-based merging followed by expert manual curation to ensure biological relevance and reduce redundancy. This resource provides researchers with a reliable, consolidated motif database for transcription factor binding site prediction and  regulatory sequence analysis.  
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports: 
+    ggplot2,
+    ggpubr,
+    methods,
+    universalmotif
+Depends: 
+    R (>= 3.5)
+LazyData: true
